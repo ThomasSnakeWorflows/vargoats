@@ -1,1 +1,3 @@
 # vargoats
+
+CNVpipeline for Vargoats
