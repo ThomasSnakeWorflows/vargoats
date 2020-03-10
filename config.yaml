@@ -1,0 +1,4 @@
+samples: samples.txt
+reference: /ccc/cont007/home/fg0047/farautth/work/vargoats/data/Capra_hircus_chr.fa
+chromregex: '(chr)?([1-9][0-9]?|[XY])'
+workdir: /ccc/cont007/home/fg0047/farautth/work/vargoats/REMAINING/mantasv
