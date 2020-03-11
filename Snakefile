@@ -75,6 +75,7 @@ bamlistfile = os.path.abspath(config['samples'])
 sample_batches = set_sample_batches(bamlistfile)
 reference = os.path.abspath(config['reference'])
 
+svtypes = ["DEL", "INS", "INV"]
 
 workdir: config["workdir"]
 
@@ -83,11 +84,13 @@ localrules: bamlist, cleanmanta, regions
 # Wildcard constraints
 wildcard_constraints:
     batch="|".join(sample_batches.keys()),
+    svtype="|".join(svtypes),
 
 
 rule all:
     input:
-        expand("{batch}.tar.gz", batch=sample_batches.keys())
+        expand("{batch}.tar.gz", batch=sample_batches.keys()),
+        expand("{svtype}_merged.vcf.gz", svtype=svtypes)
 
 
 rule regions:
@@ -121,7 +124,8 @@ rule runmanta:
         bamlist = "{batch}/bamlist.txt",
         regions = "regions.bed.gz"
     output:
-        "{batch}/rundir/workflow.exitcode.txt"
+        "{batch}/rundir/workflow.exitcode.txt",
+        "{batch}/rundir/results/variants/diploidSV.vcf.gz"
     threads:
         get_threads("runmanta")
     params:
@@ -146,34 +150,47 @@ rule runmanta:
 
 rule cleanmanta:
     input:
-        exitcode="{batch}/rundir/workflow.exitcode.txt",
-        diploidsv="{batch}/rundir/results/variants/diploidSV.vcf.gz"
+        expand("{svtype}_merged.vcf.gz", svtype=svtypes),
+        exitcode="{batch}/rundir/workflow.exitcode.txt"
     output:
-        tar="{batch}.tar.gz",
-        delvcf="DEL/{batch}.diploidSV.vcf"
+        tar="{batch}.tar.gz"
     shell:
         """
         exitcode=`cat {wildcards.batch}/rundir/workflow.exitcode.txt`
         if [ $exitcode == 0 ];
         then
             rm -fr {wildcards.batch}/rundir/workspace
-            bcftools view -i 'INFO/SVTYPE=="DEL"' {input.diploidsv} -Ov -o {output.delvcf}
             tar cvzf {wildcards.batch}.tar.gz {wildcards.batch}
             rm -fr {wildcards.batch}
         fi
         """
 
+rule splitvcf:
+    input:
+        exitcode="{batch}/rundir/workflow.exitcode.txt",
+        diploidsv="{batch}/rundir/results/variants/diploidSV.vcf.gz"
+    output:
+        "{svtype}/{batch}.diploidSV.vcf"
+    shell:
+        """
+        exitcode=`cat {wildcards.batch}/rundir/workflow.exitcode.txt`
+        if [ $exitcode == 0 ];
+        then
+           bcftools view -i 'INFO/SVTYPE=="{wildcards.svtype}"' {input.diploidsv} -Ov -o {output}
+        fi
+        """
+
 rule mergevcf:
     input:
-        expand("DEL/{batch}.diploidSV.vcf", batch=sample_batches.keys())
+        expand("{{svtype}}/{batch}.diploidSV.vcf", batch=sample_batches.keys())
     output:
-        mergeddel="DEL_merged.vcf.gz",
-        tbi="DEL_merged.vcf.gz.tbi"
+        merged="{svtype}_merged.vcf.gz",
+        tbi="{svtype}_merged.vcf.gz.tbi"
     shadow: "shallow"
     shell:
         """
-        ls DEL/batch*.diploidSV.vcf > DEL_sample_files.txt
-        SURVIVOR merge DEL_sample_files.txt 0.1 1 1 1 1 50 sample_merged.vcf
-        bcftools sort sample_merged.vcf -Oz -o {output.mergeddel}
-        tabix {output.mergeddel}
+        ls {wildcards.svtype}/batch*.diploidSV.vcf > sample_files.txt
+        SURVIVOR merge sample_files.txt 0.1 1 1 1 1 50 sample_merged.vcf
+        bcftools sort sample_merged.vcf -Oz -o {output.merged}
+        tabix {output.merged}
         """

@@ -10,8 +10,9 @@ import subprocess
 import logging
 
 #manta_bin = "/home/faraut/dynawork/CNVPipeline/work/vargoats/cobalt2.0/manta-1.6.0.centos6_x86_64/bin"
-manta_bin = "/ccc/cont007/home/fg0047/farautth/work/vargoats/manta-1.6.0.centos6_x86_64/bin"
-configManta = manta_bin + "/configManta.py"
+#manta_bin = "/ccc/cont007/home/fg0047/farautth/work/vargoats/manta-1.6.0.centos6_x86_64/bin"
+#configManta = manta_bin + "/configManta.py"
+configManta = "configManta.py"
 
 def get_bamfiles(sample_file):
     with open(sample_file) as fin:
