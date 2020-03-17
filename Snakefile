@@ -151,7 +151,7 @@ rule runmanta:
 
 rule cleanmanta:
     input:
-        expand("{svtype}_merged.vcf.gz", svtype=svtypes),
+        expand("{svtype}/{{batch}}.diploidSV.vcf.gz", svtype=svtypes),
         exitcode="{batch}/rundir/workflow.exitcode.txt"
     output:
         tar="{batch}.tar.gz"
@@ -183,7 +183,7 @@ rule splitvcf:
         """
 
 rule tarsvtype:
-     input:
+    input:
         expand("{{svtype}}/{batch}.diploidSV.vcf.gz", batch=sample_batches.keys())
     output:
         "{svtype}.tar.gz"
