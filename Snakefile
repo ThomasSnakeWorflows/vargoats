@@ -190,6 +190,7 @@ rule tarsvtype:
     shell:
         """
         tar cvzf {wildcards.svtype}.tar.gz {wildcards.svtype}
+        rm -fr {wildcards.svtype}
         """
 
 
