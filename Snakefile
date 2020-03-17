@@ -46,7 +46,8 @@ def set_sample_batches(sample_file, size_batches=4):
     return samples
 
 
-def get_chromosomes(referencefai, chromregex='(chr)?([1-9][0-9]?|[XY])'):
+def get_chromosomes(wildcards, reference, chromregex='(chr)?([1-9][0-9]?|[XY])'):
+    referencefai = reference + ".fai"
     p = re.compile(chromregex)
     chromosomes = []
     with open(referencefai) as fin:
@@ -75,7 +76,7 @@ bamlistfile = os.path.abspath(config['samples'])
 sample_batches = set_sample_batches(bamlistfile)
 reference = os.path.abspath(config['reference'])
 
-svtypes = ["DEL", "INS", "INV"]
+svtypes = ["DEL", "INS"]
 
 workdir: config["workdir"]
 
@@ -170,27 +171,31 @@ rule splitvcf:
         exitcode="{batch}/rundir/workflow.exitcode.txt",
         diploidsv="{batch}/rundir/results/variants/diploidSV.vcf.gz"
     output:
-        "{svtype}/{batch}.diploidSV.vcf"
+        "{svtype}/{batch}.diploidSV.vcf.gz"
     shell:
         """
         exitcode=`cat {wildcards.batch}/rundir/workflow.exitcode.txt`
         if [ $exitcode == 0 ];
         then
-           bcftools view -i 'INFO/SVTYPE=="{wildcards.svtype}"' {input.diploidsv} -Ov -o {output}
+           bcftools view -i 'INFO/SVTYPE=="{wildcards.svtype}"' {input.diploidsv} -Oz -o {output}
+          tabix {output}
         fi
         """
 
 rule mergevcf:
     input:
-        expand("{{svtype}}/{batch}.diploidSV.vcf", batch=sample_batches.keys())
+        expand("{{svtype}}/{batch}.diploidSV.vcf.gz", batch=sample_batches.keys())
     output:
         merged="{svtype}_merged.vcf.gz",
         tbi="{svtype}_merged.vcf.gz.tbi"
+    params:
+        chromosomes = lambda w: get_chromosomes(w, reference)
     shadow: "shallow"
     shell:
         """
-        ls {wildcards.svtype}/batch*.diploidSV.vcf > sample_files.txt
-        SURVIVOR merge sample_files.txt 0.1 1 1 1 1 50 sample_merged.vcf
+        ls {wildcards.svtype}/batch*.diploidSV.vcf.gz > sample_files.txt
+        svimmer --max_distance 10 --max_size_difference 10 --ids \
+           sample_files.txt {params.chromosomes} > sample_merged.vcf
         bcftools sort sample_merged.vcf -Oz -o {output.merged}
         tabix {output.merged}
         """
