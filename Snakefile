@@ -91,7 +91,7 @@ wildcard_constraints:
 rule all:
     input:
         expand("{batch}.tar.gz", batch=sample_batches.keys()),
-        expand("{svtype}_merged.vcf.gz", svtype=svtypes)
+        expand("{svtype}.tar.gz", svtype=svtypes)
 
 
 rule regions:
@@ -182,20 +182,31 @@ rule splitvcf:
         fi
         """
 
-rule mergevcf:
-    input:
+rule tarsvtype:
+     input:
         expand("{{svtype}}/{batch}.diploidSV.vcf.gz", batch=sample_batches.keys())
     output:
-        merged="{svtype}_merged.vcf.gz",
-        tbi="{svtype}_merged.vcf.gz.tbi"
-    params:
-        chromosomes = lambda w: get_chromosomes(w, reference)
-    shadow: "shallow"
+        "{svtype}.tar.gz"
     shell:
         """
-        ls {wildcards.svtype}/batch*.diploidSV.vcf.gz > sample_files.txt
-        svimmer --max_distance 10 --max_size_difference 10 --ids \
-           sample_files.txt {params.chromosomes} > sample_merged.vcf
-        bcftools sort sample_merged.vcf -Oz -o {output.merged}
-        tabix {output.merged}
+        tar cvzf {wildcards.svtype}.tar.gz {wildcards.svtype}
         """
+
+
+# rule mergevcf:
+#     input:
+#         expand("{{svtype}}/{batch}.diploidSV.vcf.gz", batch=sample_batches.keys())
+#     output:
+#         merged="{svtype}_merged.vcf.gz",
+#         tbi="{svtype}_merged.vcf.gz.tbi"
+#     params:
+#         chromosomes = lambda w: get_chromosomes(w, reference)
+#     shadow: "shallow"
+#     shell:
+#         """
+#         ls {wildcards.svtype}/batch*.diploidSV.vcf.gz > sample_files.txt
+#         svimmer --max_distance 10 --max_size_difference 10 --ids \
+#            sample_files.txt {params.chromosomes} > sample_merged.vcf
+#         bcftools sort sample_merged.vcf -Oz -o {output.merged}
+#         tabix {output.merged}
+#         """
