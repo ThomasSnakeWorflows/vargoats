@@ -184,7 +184,8 @@ rule splitvcf:
 
 rule tarsvtype:
     input:
-        expand("{{svtype}}/{batch}.diploidSV.vcf.gz", batch=sample_batches.keys())
+        expand("{{svtype}}/{batch}.diploidSV.vcf.gz", batch=sample_batches.keys()),
+        expand("{batch}.tar.gz", batch=sample_batches.keys())
     output:
         "{svtype}.tar.gz"
     shell:
