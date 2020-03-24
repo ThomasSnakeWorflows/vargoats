@@ -9,7 +9,7 @@ module load bioinfo/samtools-1.9
 module load bioinfo/bcftools-1.9
 module load bioinfo/snakemake-4.8.0
 
-manta=/home/faraut/dynawork/CNVPipeline/work/vargoats/cobalt2.0/manta-1.6.0.centos6_x86_64/bin
+manta=/work2/genphyse/dynagen/tfaraut/CNVPipeline/soft/manta-1.6.0.centos6_x86_64
 here=`pwd`
 export PATH=$manta:$here:$PATH
 ```
