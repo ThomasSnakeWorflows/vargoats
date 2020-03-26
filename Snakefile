@@ -27,7 +27,7 @@ def get_mem(rule):
     return threads * 4
 
 
-def set_sample_batches(sample_file, size_batches=4):
+def set_sample_batches(sample_file, size_batches=10):
     """
        Construct batches os samples of size size_batches
     """
