@@ -5,6 +5,7 @@ from collections import defaultdict
 
 DEFAULT_THREADS = 28
 
+
 def tool_exists(name):
     """Check whether `name` is on PATH and marked as executable."""
     # from whichcraft import which
@@ -58,6 +59,10 @@ def get_chromosomes(wildcards, reference, chromregex='(chr)?([1-9][0-9]?|[XY])')
     return chromosomes
 
 
+def get_bam_files(wildcards):
+    return [bam for bam in sample_batches[wildcards.batch]
+
+
 if not tool_exists("tabix"):
     print("tabix is not available")
     exit(1)
@@ -108,45 +113,81 @@ rule regions:
         " tabix {output} "
 
 
-rule bamlist:
-    input:
-        bamlistfile
-    output:
-        "{batch}/bamlist.txt"
-    run:
-        with open(output[0], "w") as fout:
-            for bam in sample_batches[wildcards.batch]:
-                fout.write("%s\n" % bam)
+# rule bamlist:
+#     input:
+#         bamlistfile
+#     output:
+#         "{batch}/bamlist.txt"
+#     run:
+#         with open(output[0], "w") as fout:
+#             for bam in sample_batches[wildcards.batch]:
+#                 fout.write("%s\n" % bam)
 
 
 rule runmanta:
     input:
-        reference = reference,
-        bamlist = "{batch}/bamlist.txt",
-        regions = "regions.bed.gz"
+        mantarunner = "{batch}/rundir/runWorkflow.py"
     output:
         "{batch}/rundir/workflow.exitcode.txt",
         "{batch}/rundir/results/variants/diploidSV.vcf.gz"
     threads:
         get_threads("runmanta")
     params:
-        mem = get_mem("runmanta"),
-        rundir = "{batch}/rundir"
+        mem = get_mem("runmanta")
     log:
         stdout = "logs/{batch}/run.o",
         stderr = "logs/{batch}/run.e"
     shell:
-        """
-	    python2 ../manta.py -b {input.bamlist} -r {input.reference} \
-         --regions {input.regions} -w {params.rundir} \
-         --threads {threads} --mem {params.mem} 1>{log.stdout} 2>{log.stderr}
-        """
-        #fg_sar start manta
-        #python2 ../manta.py -b {input.bamlist} -r {input.reference} \
-        # --regions {input.regions} -w {params.rundir} \
-        # --threads {threads} --mem {params.mem} 1>{log.stdout} 2>{log.stderr}
-        #fg_sar stop manta
-        #"""
+        "python2 {input.mantarunner} -j {threads} -g {params.mem} --quiet "
+        " 1>{log.stdout} 2>{log.stderr} "
+
+
+rule configmanta:
+    input:
+        reference=reference,
+        bams=get_bam_files,
+        regions="regions.bed.gz"
+    output:
+        "{batch}/rundir/workflow.exitcode.txt",
+        "{batch}/rundir/results/variants/diploidSV.vcf.gz"
+    threads:
+        1
+    params:
+        rundir = "{batch}/rundir"
+    log:
+        stdout = "logs/{batch}/run.o",
+        stderr = "logs/{batch}/run.e"
+    run:
+        import subprocess
+        command = "configManta.py "
+        for bam in input.bams:
+            command += "--bam %s " % bam
+        command += "--referenceFasta %s " % input.reference
+        command += "--runDir %s " % params.rundir
+        command += "--callRegions %s " % input.regions
+        try:
+            print(command)
+            subprocess.call(command, shell=True)
+        except subprocess.CalledProcessError:
+            print("Manta configuration failed")
+
+
+rule runmanta:
+    input:
+        mantarunner = "{batch}rundir/runWorkflow.py"
+    output:
+        "{batch}/rundir/workflow.exitcode.txt",
+        "{batch}/rundir/results/variants/diploidSV.vcf.gz"
+    threads:
+        get_threads("runmanta")
+    params:
+        mem=get_mem("runmanta")
+    log:
+        stdout = "logs/run.o",
+        stderr = "logs/run.e"
+    shell:
+        "python2 {input} -j {threads} -g {params.mem} --quiet "
+        " 1>{log.stdout} 2>{log.stderr} "
 
 
 rule cleanmanta:
@@ -193,22 +234,3 @@ rule tarsvtype:
         tar cvzf {wildcards.svtype}.tar.gz {wildcards.svtype}
         rm -fr {wildcards.svtype}
         """
-
-
-# rule mergevcf:
-#     input:
-#         expand("{{svtype}}/{batch}.diploidSV.vcf.gz", batch=sample_batches.keys())
-#     output:
-#         merged="{svtype}_merged.vcf.gz",
-#         tbi="{svtype}_merged.vcf.gz.tbi"
-#     params:
-#         chromosomes = lambda w: get_chromosomes(w, reference)
-#     shadow: "shallow"
-#     shell:
-#         """
-#         ls {wildcards.svtype}/batch*.diploidSV.vcf.gz > sample_files.txt
-#         svimmer --max_distance 10 --max_size_difference 10 --ids \
-#            sample_files.txt {params.chromosomes} > sample_merged.vcf
-#         bcftools sort sample_merged.vcf -Oz -o {output.merged}
-#         tabix {output.merged}
-#         """
