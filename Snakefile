@@ -113,17 +113,6 @@ rule regions:
         " tabix {output} "
 
 
-# rule bamlist:
-#     input:
-#         bamlistfile
-#     output:
-#         "{batch}/bamlist.txt"
-#     run:
-#         with open(output[0], "w") as fout:
-#             for bam in sample_batches[wildcards.batch]:
-#                 fout.write("%s\n" % bam)
-
-
 rule runmanta:
     input:
         mantarunner = "{batch}/rundir/runWorkflow.py"
@@ -196,6 +185,7 @@ rule cleanmanta:
         exitcode="{batch}/rundir/workflow.exitcode.txt"
     output:
         tar="{batch}.tar.gz"
+    priority: 10
     shell:
         """
         exitcode=`cat {wildcards.batch}/rundir/workflow.exitcode.txt`
@@ -213,6 +203,7 @@ rule splitvcf:
         diploidsv="{batch}/rundir/results/variants/diploidSV.vcf.gz"
     output:
         "{svtype}/{batch}.diploidSV.vcf.gz"
+    priority: 20
     shell:
         """
         exitcode=`cat {wildcards.batch}/rundir/workflow.exitcode.txt`
