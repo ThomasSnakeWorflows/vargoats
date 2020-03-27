@@ -112,25 +112,6 @@ rule regions:
         " | awk -v OFS='\\t' '{{ print $1,0,$2}}' | bgzip > {output}; "
         " tabix {output} "
 
-
-rule runmanta:
-    input:
-        mantarunner = "{batch}/rundir/runWorkflow.py"
-    output:
-        "{batch}/rundir/workflow.exitcode.txt",
-        "{batch}/rundir/results/variants/diploidSV.vcf.gz"
-    threads:
-        get_threads("runmanta")
-    params:
-        mem = get_mem("runmanta")
-    log:
-        stdout = "logs/{batch}/run.o",
-        stderr = "logs/{batch}/run.e"
-    shell:
-        "python2 {input.mantarunner} -j {threads} -g {params.mem} --quiet "
-        " 1>{log.stdout} 2>{log.stderr} "
-
-
 rule configmanta:
     input:
         reference=reference,
