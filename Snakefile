@@ -60,7 +60,7 @@ def get_chromosomes(wildcards, reference, chromregex='(chr)?([1-9][0-9]?|[XY])')
 
 
 def get_bam_files(wildcards):
-    return [bam for bam in sample_batches[wildcards.batch]
+    return [bam for bam in sample_batches[wildcards.batch]]
 
 
 if not tool_exists("tabix"):
@@ -73,19 +73,19 @@ if not tool_exists("bgzip"):
     exit(1)
 
 
-if not os.path.isfile("%s.fai" % config['reference']):
-    print("reference genome must be fai indexed")
-
-
 bamlistfile = os.path.abspath(config['samples'])
 sample_batches = set_sample_batches(bamlistfile)
 reference = os.path.abspath(config['reference'])
+
+if not os.path.isfile("%s.fai" % config['reference']):
+    print("reference genome must be fai indexed")
+
 
 svtypes = ["DEL", "INS"]
 
 workdir: config["workdir"]
 
-localrules: bamlist, cleanmanta, regions
+localrules: cleanmanta, regions, configmanta, splitvcf, tarsvtype
 
 # Wildcard constraints
 wildcard_constraints:
@@ -114,12 +114,12 @@ rule regions:
 
 rule configmanta:
     input:
+        "%s.fai" % reference,
         reference=reference,
         bams=get_bam_files,
         regions="regions.bed.gz"
     output:
-        "{batch}/rundir/workflow.exitcode.txt",
-        "{batch}/rundir/results/variants/diploidSV.vcf.gz"
+        "{batch}/rundir/runWorkflow.py"
     threads:
         1
     params:
@@ -144,7 +144,7 @@ rule configmanta:
 
 rule runmanta:
     input:
-        mantarunner = "{batch}rundir/runWorkflow.py"
+        mantarunner = "{batch}/rundir/runWorkflow.py"
     output:
         "{batch}/rundir/workflow.exitcode.txt",
         "{batch}/rundir/results/variants/diploidSV.vcf.gz"
@@ -153,8 +153,8 @@ rule runmanta:
     params:
         mem=get_mem("runmanta")
     log:
-        stdout = "logs/run.o",
-        stderr = "logs/run.e"
+        stdout = "logs/{batch}.o",
+        stderr = "logs/{batch}.e"
     shell:
         "python2 {input} -j {threads} -g {params.mem} --quiet "
         " 1>{log.stdout} 2>{log.stderr} "

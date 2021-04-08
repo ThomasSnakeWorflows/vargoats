@@ -7,11 +7,14 @@
 ```bash
 module load bioinfo/samtools-1.9
 module load bioinfo/bcftools-1.9
-module load bioinfo/snakemake-4.8.0
+module load system/Python-3.7.4
+virtualenv mantaenv
+source mantaenv/bin/activate
+pip install snakemake
+pip install drmaa
 
-manta=/work2/genphyse/dynagen/tfaraut/CNVPipeline/soft/manta-1.6.0.centos6_x86_64
-here=`pwd`
-export PATH=$manta:$here:$PATH
+manta=/work2/genphyse/dynagen/tfaraut/CNVPipeline/soft/manta-1.6.0.centos6_x86_64/bin
+export PATH=$manta:$PATH
 ```
 
 Running the CNVPipeline

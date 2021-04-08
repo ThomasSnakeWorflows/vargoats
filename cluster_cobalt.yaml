@@ -1,0 +1,10 @@
+__default__:
+  mem: 8
+  name: mysnake.{rule}
+  output: logs/cluster/{rule}.out
+  error: logs/cluster/{rule}.err
+  time: 36000
+
+runmanta:
+  threads: 28
+  time: 86400
