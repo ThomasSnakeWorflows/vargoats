@@ -20,10 +20,19 @@ export PATH=$manta:$PATH
 Running the CNVPipeline
 
 ```bash
+module load bioinfo/samtools-1.9
+module load bioinfo/bcftools-1.9
+module load system/Python-3.7.4
+source mantaenv/bin/activate
+manta=/work2/genphyse/dynagen/tfaraut/CNVPipeline/soft/manta-1.6.0.centos6_x86_64/bin
+export PATH=$manta:$PATH
+```
+
+```bash
 snakemake --configfile config.yaml \
           --cluster-config cluster.yaml \
           --drmaa " --mem={cluster.mem}000 --mincpus={threads} --time={cluster.time} -J {cluster.name} -N 1=1" \
-          --jobs 4 -p -n
+          --jobs 20 -p -n
 ```
 
 **Environment and runing on cobablt**

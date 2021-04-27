@@ -3,7 +3,7 @@ import os
 import shutil
 from collections import defaultdict
 
-DEFAULT_THREADS = 28
+DEFAULT_THREADS = 12
 
 
 def tool_exists(name):
@@ -24,7 +24,7 @@ def get_threads(rule, default=DEFAULT_THREADS):
 
 def get_mem(rule):
     threads = get_threads(rule)
-    return threads * 4
+    return threads * 8
 
 
 def set_sample_batches(sample_file, size_batches=10):

@@ -7,5 +7,5 @@ __default__:
 
 runmanta:
   mem: 32
-  time: "24:00:00"
-  threads: 8
+  time: "96:00:00"
+  threads: 5
