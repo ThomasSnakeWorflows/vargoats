@@ -3,8 +3,7 @@ import os
 import shutil
 from collections import defaultdict
 
-DEFAULT_THREADS = 12
-
+DEFAULT_THREADS = 3
 
 def tool_exists(name):
     """Check whether `name` is on PATH and marked as executable."""
@@ -47,7 +46,19 @@ def set_sample_batches(sample_file, size_batches=10):
     return samples
 
 
-def get_chromosomes(wildcards, reference, chromregex='(chr)?([1-9][0-9]?|[XY])'):
+def get_chromosomes_old(wildcards, reference, chromregex='(chr)?([1-9][0-9]?|[XY])'):
+    referencefai = reference + ".fai"
+    p = re.compile(chromregex)
+    chromosomes = []
+    with open(referencefai) as fin:
+        contigs = [line.split("\t")[0] for line in fin]
+    for contig in contigs:
+        if p.match(contig):
+            chromosomes.append(contig)
+    return chromosomes
+
+
+def get_chromosomes(reference, chromregex='(chr)?([1-9][0-9]?|[XY])'):
     referencefai = reference + ".fai"
     p = re.compile(chromregex)
     chromosomes = []
@@ -81,23 +92,23 @@ if not os.path.isfile("%s.fai" % config['reference']):
     print("reference genome must be fai indexed")
 
 
-svtypes = ["DEL", "INS"]
+chromosomes = get_chromosomes(reference, config['chromregex'])
 
 workdir: config["workdir"]
 
-localrules: cleanmanta, regions, configmanta, splitvcf, tarsvtype
+localrules: chromregion, configchrommanta
 
 # Wildcard constraints
 wildcard_constraints:
     batch="|".join(sample_batches.keys()),
-    svtype="|".join(svtypes),
+    chrom="|".join(chromosomes)
 
 
 rule all:
     input:
-        expand("{batch}.tar.gz", batch=sample_batches.keys()),
-        expand("{svtype}.tar.gz", svtype=svtypes)
-
+        expand("{batch}/{chrom}/rundir/workflow.exitcode.txt",
+               batch=sample_batches.keys(),
+               chrom=chromosomes)
 
 rule regions:
     input:
@@ -112,21 +123,36 @@ rule regions:
         " | awk -v OFS='\\t' '{{ print $1,0,$2}}' | bgzip > {output}; "
         " tabix {output} "
 
-rule configmanta:
+
+rule chromregion:
+    input:
+        reference = reference,
+        fai = reference+".fai"
+    output:
+        "regions/{chrom}.bed.gz"
+    params:
+        chrom = lambda w: w.chrom
+    shell:
+        "cat {input.fai} | grep -w  \'^{params.chrom}\' "
+        " | awk -v OFS='\\t' '{{ print $1,0,$2}}' | bgzip > {output}; "
+        " tabix {output} "
+
+
+rule configchrommanta:
     input:
         "%s.fai" % reference,
         reference=reference,
         bams=get_bam_files,
-        regions="regions.bed.gz"
+        regions="regions/{chrom}.bed.gz"
     output:
-        "{batch}/rundir/runWorkflow.py"
+        "{batch}/{chrom}/rundir/runWorkflow.py"
     threads:
         1
     params:
-        rundir = "{batch}/rundir"
+        rundir = "{batch}/{chrom}/rundir"
     log:
-        stdout = "logs/{batch}/run.o",
-        stderr = "logs/{batch}/run.e"
+        stdout = "logs/{batch}/{chrom}_config.o",
+        stderr = "logs/{batch}/{chrom}_config.e"
     run:
         import subprocess
         command = "configManta.py "
@@ -142,67 +168,19 @@ rule configmanta:
             print("Manta configuration failed")
 
 
-rule runmanta:
+rule runchrommanta:
     input:
-        mantarunner = "{batch}/rundir/runWorkflow.py"
+        mantarunner = "{batch}/{chrom}/rundir/runWorkflow.py"
     output:
-        "{batch}/rundir/workflow.exitcode.txt",
-        "{batch}/rundir/results/variants/diploidSV.vcf.gz"
+        "{batch}/{chrom}/rundir/workflow.exitcode.txt",
+        "{batch}/{chrom}/rundir/results/variants/diploidSV.vcf.gz"
     threads:
         get_threads("runmanta")
     params:
         mem=get_mem("runmanta")
     log:
-        stdout = "logs/{batch}.o",
-        stderr = "logs/{batch}.e"
+        stdout = "logs/{batch}/{chrom}_run.o",
+        stderr = "logs/{batch}}/{chrom}_run.e"
     shell:
         "python2 {input} -j {threads} -g {params.mem} --quiet "
         " 1>{log.stdout} 2>{log.stderr} "
-
-
-rule cleanmanta:
-    input:
-        expand("{svtype}/{{batch}}.diploidSV.vcf.gz", svtype=svtypes),
-        exitcode="{batch}/rundir/workflow.exitcode.txt"
-    output:
-        tar="{batch}.tar.gz"
-    priority: 10
-    shell:
-        """
-        exitcode=`cat {wildcards.batch}/rundir/workflow.exitcode.txt`
-        if [ $exitcode == 0 ];
-        then
-            rm -fr {wildcards.batch}/rundir/workspace
-            tar cvzf {wildcards.batch}.tar.gz {wildcards.batch}
-            rm -fr {wildcards.batch}
-        fi
-        """
-
-rule splitvcf:
-    input:
-        exitcode="{batch}/rundir/workflow.exitcode.txt",
-        diploidsv="{batch}/rundir/results/variants/diploidSV.vcf.gz"
-    output:
-        "{svtype}/{batch}.diploidSV.vcf.gz"
-    priority: 20
-    shell:
-        """
-        exitcode=`cat {wildcards.batch}/rundir/workflow.exitcode.txt`
-        if [ $exitcode == 0 ];
-        then
-           bcftools view -i 'INFO/SVTYPE=="{wildcards.svtype}"' {input.diploidsv} -Oz -o {output}
-          tabix {output}
-        fi
-        """
-
-rule tarsvtype:
-    input:
-        expand("{{svtype}}/{batch}.diploidSV.vcf.gz", batch=sample_batches.keys()),
-        expand("{batch}.tar.gz", batch=sample_batches.keys())
-    output:
-        "{svtype}.tar.gz"
-    shell:
-        """
-        tar cvzf {wildcards.svtype}.tar.gz {wildcards.svtype}
-        rm -fr {wildcards.svtype}
-        """

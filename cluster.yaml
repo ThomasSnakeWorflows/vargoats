@@ -8,4 +8,4 @@ __default__:
 runmanta:
   mem: 32
   time: "96:00:00"
-  threads: 5
+  threads: 3
