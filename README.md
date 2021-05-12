@@ -28,6 +28,24 @@ manta=/work2/genphyse/dynagen/tfaraut/CNVPipeline/soft/manta-1.6.0.centos6_x86_6
 export PATH=$manta:$PATH
 ```
 
+Alternatively
+
+```bash
+conda install -n base -c conda-forge mamba
+conda activate base
+mamba create -c conda-forge -c bioconda -n manta snakemake
+conda activate manta
+conda install -c bioconda manta
+conda install -c bioconda bcftools
+conda install -c bioconda samtools
+pip install drmaa
+```
+
+Running the CNVPipeline
+``` 
+conda activate manta
+```
+
 ```bash
 snakemake --configfile config.yaml \
           --cluster-config cluster.yaml \
