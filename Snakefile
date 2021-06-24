@@ -5,6 +5,7 @@ from collections import defaultdict
 
 DEFAULT_THREADS = 3
 
+
 def tool_exists(name):
     """Check whether `name` is on PATH and marked as executable."""
     # from whichcraft import which
@@ -23,7 +24,8 @@ def get_threads(rule, default=DEFAULT_THREADS):
 
 def get_mem(rule):
     threads = get_threads(rule)
-    return threads * 8
+    print(threads)
+    return threads * 4
 
 
 def set_sample_batches(sample_file, size_batches=10):
@@ -96,19 +98,25 @@ chromosomes = get_chromosomes(reference, config['chromregex'])
 
 workdir: config["workdir"]
 
-localrules: chromregion, configchrommanta
+localrules: chromregion, configchrommanta, concat
 
 # Wildcard constraints
 wildcard_constraints:
     batch="|".join(sample_batches.keys()),
     chrom="|".join(chromosomes)
 
+#
+# rule all:
+#     input:
+#         expand("{batch}/{chrom}/rundir/workflow.exitcode.txt",
+#                batch=sample_batches.keys(),
+#                chrom=chromosomes)
+
 
 rule all:
     input:
-        expand("{batch}/{chrom}/rundir/workflow.exitcode.txt",
-               batch=sample_batches.keys(),
-               chrom=chromosomes)
+        expand("{batch}/diploidSV.vcf.gz.tbi", batch=sample_batches.keys())
+
 
 rule regions:
     input:
@@ -121,7 +129,7 @@ rule regions:
     shell:
         "cat {input.fai} | egrep \'^{params.chromregex}\' "
         " | awk -v OFS='\\t' '{{ print $1,0,$2}}' | bgzip > {output}; "
-        " tabix {output} "
+        " tabix {output.vcf} "
 
 
 rule chromregion:
@@ -175,12 +183,41 @@ rule runchrommanta:
         "{batch}/{chrom}/rundir/workflow.exitcode.txt",
         "{batch}/{chrom}/rundir/results/variants/diploidSV.vcf.gz"
     threads:
-        get_threads("runmanta")
+        get_threads("runchrommanta",16)
     params:
-        mem=get_mem("runmanta")
+        mem=get_mem("runchrommanta")
     log:
         stdout = "logs/{batch}/{chrom}_run.o",
-        stderr = "logs/{batch}}/{chrom}_run.e"
+        stderr = "logs/{batch}/{chrom}_run.e"
     shell:
-        "python2 {input} -j {threads} -g {params.mem} --quiet "
-        " 1>{log.stdout} 2>{log.stderr} "
+        """
+        python2 {input} -j {threads} -g {params.mem} --quiet \
+         1>{log.stdout} 2>{log.stderr}
+        """
+
+rule concat:
+    input:
+        expand("{{batch}}/{chrom}/rundir/results/variants/diploidSV.vcf.gz",
+                  chrom=chromosomes)
+    output:
+        "{batch}/diploidSV.vcf.gz.tbi",
+        vcf="{batch}/diploidSV.vcf.gz"
+
+    log:
+        stdout = "logs/{batch}/concat.o",
+        stderr = "logs/{batch}/concat.e"
+    shell:
+        """
+        bcftools concat -Oz -o {output.vcf} {input}
+        tabix {output.vcf}
+        """
+
+
+
+
+# """
+# fg_sar start manta_{wildcards.batch}_{wildcards.chrom}
+# python2 {input} -j {threads} -g {params.mem} --quiet \
+#  1>{log.stdout} 2>{log.stderr}
+# fg_sar stop manta_{wildcards.batch}_{wildcards.chrom}
+# """
