@@ -31,7 +31,7 @@ export PATH=$manta:$PATH
 ```bash
 snakemake --configfile config.yaml \
           --cluster-config cluster.yaml \
-          --drmaa " --mem={cluster.mem}000 --mincpus={threads} --time={cluster.time} -J {cluster.name} -N 1=1" \
+          --drmaa " --mem={cluster.mem}000 --mincpus={threads} --time={cluster.time} -J {cluster.name}" \
           --jobs 20 -p -n
 ```
 
