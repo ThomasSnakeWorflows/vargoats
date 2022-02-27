@@ -2,6 +2,7 @@
 import os
 import shutil
 from collections import defaultdict
+from pathlib import Path
 
 DEFAULT_THREADS = 3
 
@@ -24,7 +25,6 @@ def get_threads(rule, default=DEFAULT_THREADS):
 
 def get_mem(rule):
     threads = get_threads(rule)
-    print(threads)
     return threads * 4
 
 
@@ -60,7 +60,7 @@ def get_chromosomes_old(wildcards, reference, chromregex='(chr)?([1-9][0-9]?|[XY
     return chromosomes
 
 
-def get_chromosomes(reference, chromregex='(chr)?([1-9][0-9]?|[XY])'):
+def get_chromosome_from_regex(reference, chromregex='(chr)?([1-9][0-9]?|[XY])'):
     referencefai = reference + ".fai"
     p = re.compile(chromregex)
     chromosomes = []
@@ -69,6 +69,27 @@ def get_chromosomes(reference, chromregex='(chr)?([1-9][0-9]?|[XY])'):
     for contig in contigs:
         if p.match(contig):
             chromosomes.append(contig)
+    return chromosomes
+
+
+def get_chromosomes_fromlist(chromfile):
+    chromosomes = []
+    with open(chromfile) as fin:
+        for line in fin:
+            chromosomes.append(line.rstrip())
+    return chromosomes
+
+
+def get_chromosomes(reference, config):
+    if "chromosomes" in config:
+        chrom_file = config["chromosomes"]
+        if Path(chrom_file).is_file():
+            chromosomes = get_chromosomes_fromlist(chrom_file)
+        else:
+            print("Chromosome file missing")
+            exit(1)
+    else:
+        chromosomes = get_chromosome_from_regex(reference, config["chromregex"])
     return chromosomes
 
 
@@ -93,24 +114,16 @@ reference = os.path.abspath(config['reference'])
 if not os.path.isfile("%s.fai" % config['reference']):
     print("reference genome must be fai indexed")
 
-
-chromosomes = get_chromosomes(reference, config['chromregex'])
+chromosomes = get_chromosomes(reference, config)
 
 workdir: config["workdir"]
 
-localrules: chromregion, configchrommanta, concat
+localrules: chromregion, configchrommanta, concat, renameid
 
 # Wildcard constraints
 wildcard_constraints:
     batch="|".join(sample_batches.keys()),
     chrom="|".join(chromosomes)
-
-#
-# rule all:
-#     input:
-#         expand("{batch}/{chrom}/rundir/workflow.exitcode.txt",
-#                batch=sample_batches.keys(),
-#                chrom=chromosomes)
 
 
 rule all:
@@ -118,18 +131,18 @@ rule all:
         expand("{batch}/diploidSV.vcf.gz.tbi", batch=sample_batches.keys())
 
 
-rule regions:
-    input:
-        reference = reference,
-        fai = reference+".fai"
-    output:
-        "regions.bed.gz"
-    params:
-        chromregex = config['chromregex']
-    shell:
-        "cat {input.fai} | egrep \'^{params.chromregex}\' "
-        " | awk -v OFS='\\t' '{{ print $1,0,$2}}' | bgzip > {output}; "
-        " tabix {output.vcf} "
+# rule regions:
+#     input:
+#         reference = reference,
+#         fai = reference+".fai"
+#     output:
+#         "regions.bed.gz"
+#     params:
+#         chromregex = config['chromregex']
+#     shell:
+#         "cat {input.fai} | egrep \'^{params.chromregex}\' "
+#         " | awk -v OFS='\\t' '{{ print $1,0,$2}}' | bgzip > {output}; "
+#         " tabix {output.vcf} "
 
 
 rule chromregion:
@@ -195,9 +208,24 @@ rule runchrommanta:
          1>{log.stdout} 2>{log.stderr}
         """
 
+rule renameid:
+    input:
+        "{batch}/{chrom}/rundir/results/variants/diploidSV.vcf.gz"
+    output:
+        "{batch}/{chrom}/diploidSV_renamed_id.vcf.gz"
+    params:
+        prefix=lambda w: "%s_chr%s" %(w.batch, w.chrom)
+    log:
+        stdout = "logs/{batch}/{chrom}_rename.o",
+        stderr = "logs/{batch}/{chrom}_rename.e"
+    shell:
+        """
+        python ../scripts/modify_id.py -v {input} -o {output} -p {params.prefix}
+        """
+
 rule concat:
     input:
-        expand("{{batch}}/{chrom}/rundir/results/variants/diploidSV.vcf.gz",
+        expand("{{batch}}/{chrom}/diploidSV_renamed_id.vcf.gz",
                   chrom=chromosomes)
     output:
         "{batch}/diploidSV.vcf.gz.tbi",
@@ -211,8 +239,6 @@ rule concat:
         bcftools concat -Oz -o {output.vcf} {input}
         tabix {output.vcf}
         """
-
-
 
 
 # """
